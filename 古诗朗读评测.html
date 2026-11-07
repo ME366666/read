@@ -269,6 +269,7 @@ async function init(){
   }
 }
 
+const DEMO_VER='v2'; // 示例数据版本：升级时改动此值以触发重建
 /* 生成示例朗读数据：一年级全部 13 首古诗 × 42 名学生（每生每首各读一次，形成完整矩阵） */
 async function generateDemoData(){
   const [students,poems]=await Promise.all([getStudents(),getPoems()]);
@@ -291,8 +292,8 @@ async function generateDemoData(){
     }
   }
   await new Promise((res,rej)=>{ const t=db.transaction('records','readwrite'); const os=t.objectStore('records'); for(const r of records) os.put(r); t.oncomplete=()=>res(); t.onerror=()=>rej(t.error); });
+  await idbPut('meta',{k:'demoVer',v:DEMO_VER});
   toast('已生成示例数据：42 人 × 13 首 = '+records.length+' 条');
-  router();
 }
 
 /* =========================================================
@@ -998,9 +999,9 @@ async function doImport(data,replace){
 ========================================================= */
 (async function(){
   await init();
-  // 自动生成示例数据（仅当尚无朗读记录时）
-  const existing = await getRecords();
-  if(!existing.length) await generateDemoData();
+  // 自动生成示例数据（首次或示例数据版本变化时重建）
+  const dv = await idbGet('meta','demoVer');
+  if(!dv || dv.v !== DEMO_VER) await generateDemoData();
   await router();
 })();
 </script>
