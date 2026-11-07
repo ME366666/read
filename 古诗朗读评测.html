@@ -114,7 +114,6 @@ tr:hover td{background:#f8fafc}
   <a href="#/read" data-nav="read">读诗</a>
   <a href="#/analytics" data-nav="analytics">分析图表</a>
   <span class="flex-1"></span>
-  <button class="btn ghost sm" id="btnDemo">生成示例数据</button>
   <button class="btn ghost sm" id="btnExport">导出数据</button>
   <button class="btn ghost sm" id="btnImport">导入数据</button>
 </nav>
@@ -270,10 +269,10 @@ async function init(){
   }
 }
 
-/* 生成示例朗读数据：10 首一年级古诗 × 42 名学生（每生每首各读一次，形成完整矩阵） */
+/* 生成示例朗读数据：一年级全部 13 首古诗 × 42 名学生（每生每首各读一次，形成完整矩阵） */
 async function generateDemoData(){
   const [students,poems]=await Promise.all([getStudents(),getPoems()]);
-  const selected=poems.filter(p=>p.grade==='一年级').slice(0,10);
+  const selected=poems.filter(p=>p.grade==='一年级');
   // 班级统一为三班
   for(const s of students){ if(s.className!=='三班'){ s.className='三班'; await idbPut('students',s); } }
   // 清空现有朗读记录
@@ -292,7 +291,7 @@ async function generateDemoData(){
     }
   }
   await new Promise((res,rej)=>{ const t=db.transaction('records','readwrite'); const os=t.objectStore('records'); for(const r of records) os.put(r); t.oncomplete=()=>res(); t.onerror=()=>rej(t.error); });
-  toast('已生成示例数据：42 人 × 10 首 = '+records.length+' 条');
+  toast('已生成示例数据：42 人 × 13 首 = '+records.length+' 条');
   router();
 }
 
@@ -955,10 +954,6 @@ function renderPoemRank(records,poems){
 /* =========================================================
    导出 / 导入
 ========================================================= */
-document.getElementById('btnDemo').onclick=async()=>{
-  if(!confirm('将清空现有朗读记录，并为 42 名学生各生成 10 首一年级古诗的朗读记录。\n\n确定继续？')) return;
-  await generateDemoData();
-};
 document.getElementById('btnExport').onclick=async()=>{
   const [students,poems,records]=await Promise.all([getStudents(),getPoems(),getRecords()]);
   const data={students,poems,records,exportedAt:new Date().toISOString()};
@@ -1003,6 +998,9 @@ async function doImport(data,replace){
 ========================================================= */
 (async function(){
   await init();
+  // 自动生成示例数据（仅当尚无朗读记录时）
+  const existing = await getRecords();
+  if(!existing.length) await generateDemoData();
   await router();
 })();
 </script>
