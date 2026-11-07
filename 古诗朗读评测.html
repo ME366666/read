@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>古诗朗读评测 · 一年三班</title>
+<title>古诗朗读评测</title>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
 <style>
 :root{
@@ -114,6 +114,7 @@ tr:hover td{background:#f8fafc}
   <a href="#/read" data-nav="read">读诗</a>
   <a href="#/analytics" data-nav="analytics">分析图表</a>
   <span class="flex-1"></span>
+  <button class="btn ghost sm" id="btnDemo">生成示例数据</button>
   <button class="btn ghost sm" id="btnExport">导出数据</button>
   <button class="btn ghost sm" id="btnImport">导入数据</button>
 </nav>
@@ -156,7 +157,7 @@ function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2
    种子数据
 ========================================================= */
 const STUDENTS=['焦紫阳','李靖禾','于晔潼','李晋涵','温紫嫣','王妙伊','吕彦希','历欣雅','陈睿萱','杜星卓','尤麒骏','张书恒','王梓豫','张屹宸','李欣然','刘之远','韩瑾琰','韩瑾瑜','赵峻安','樊雅萱','李子诚','贺书涵','申诺熙','耿智','周佳琪','郑诗洁','王君遥','冯钰涵','崔筱烽','刘翼鸣','张怀瑾','李赫','曾凡恩','邹嘉莹','郑鑫儿','汤文硕','容信桐','赵梓轶','王淇奥','孙睿','曲馨竹','王艺潼'];
-const CLASS_NAME='一年三班';
+const CLASS_NAME='三班';
 
 // 诗：t标题 a作者 d朝代 g年级 c内容
 const POEMS=[
@@ -265,8 +266,38 @@ async function init(){
     for(const p of POEMS){
       await idbPut('poems',{id:uid(),title:p.t,author:p.a,dynasty:p.d,grade:p.g,content:p.c,lines:splitLines(p.c)});
     }
+    await generateDemoData();
     await idbPut('meta',{k:'seeded',v:Date.now()});
   }
+}
+
+/* 生成示例朗读数据：42 名学生 × 10 条一年级古诗 */
+async function generateDemoData(){
+  const [students,poems]=await Promise.all([getStudents(),getPoems()]);
+  const grade1=poems.filter(p=>p.grade==='一年级');
+  // 班级统一为三班
+  for(const s of students){ if(s.className!=='三班'){ s.className='三班'; await idbPut('students',s); } }
+  // 清空现有朗读记录
+  await new Promise((res)=>{ const q=tx('records','readwrite').clear(); q.onsuccess=()=>res(); q.onerror=()=>res(); });
+  // 每首一年级古诗赋予一个难度系数
+  const diff={};
+  for(const p of grade1){ diff[p.id]=0.85+Math.random()*0.15; }
+  const records=[];
+  const now=Date.now(), day=24*3600*1000;
+  for(const s of students){
+    const ability=0.45+Math.random()*0.5; // 每个学生朗读水平 0.45~0.95
+    for(let i=0;i<10;i++){
+      const poem=grade1[Math.floor(Math.random()*grade1.length)];
+      let acc=ability*diff[poem.id]+(Math.random()*0.16-0.08);
+      acc=Math.max(0.1,Math.min(1,acc));
+      const lineResults=poem.lines.map(line=>({line,accuracy:Math.max(0,Math.min(1,acc+(Math.random()*0.5-0.25)))}));
+      records.push({id:uid(),studentId:s.id,poemId:poem.id,date:now-Math.floor(Math.random()*30*day),mode:Math.random()<0.5?'朗读':'背诵',overallAccuracy:acc,lineResults,recognized:''});
+    }
+  }
+  // 批量写入
+  await new Promise((res,rej)=>{ const t=db.transaction('records','readwrite'); const os=t.objectStore('records'); for(const r of records) os.put(r); t.oncomplete=()=>res(); t.onerror=()=>rej(t.error); });
+  toast('已生成示例数据：42 人 × 10 条 = '+records.length+' 条');
+  router();
 }
 
 /* =========================================================
@@ -928,6 +959,10 @@ function renderPoemRank(records,poems){
 /* =========================================================
    导出 / 导入
 ========================================================= */
+document.getElementById('btnDemo').onclick=async()=>{
+  if(!confirm('将清空现有朗读记录，并为 42 名学生各生成 10 条一年级古诗示例数据。\n\n确定继续？')) return;
+  await generateDemoData();
+};
 document.getElementById('btnExport').onclick=async()=>{
   const [students,poems,records]=await Promise.all([getStudents(),getPoems(),getRecords()]);
   const data={students,poems,records,exportedAt:new Date().toISOString()};
